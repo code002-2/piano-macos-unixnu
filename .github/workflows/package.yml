@@ -1,19 +1,13 @@
 name: package
 
-# The example's copy of the packaging action (docs/porting/packaging.md). Replace the
-# firmware repository below with this board's; the device name appears in the artifact
-# paths. The platform seed comes from the repository secret UNIXNU_UNIQUE_CHIP_ID and is
-# baked into the images, so the run's artifacts belong to one device alone: download
-# them, then delete the run. Run it in a fork of the device repository.
-
 on:
   workflow_dispatch:
     inputs:
       os:
         description: "OS profile of the images"
         type: choice
-        options: ["17", "26", "27"]
-        default: "17"
+        options: ["macos-27.3-26C5035r", "17"]
+        default: "macos-27.3-26C5035r"
 
 permissions:
   contents: read
@@ -25,7 +19,7 @@ concurrency:
 jobs:
   package:
     runs-on: macos-26
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,17 +28,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: UniXNU/UniXNU
+          ref: 2bbb39d7a0a871b27762a39e7a9a5851160f3c6a
           path: UniXNU
           submodules: recursive
       - uses: actions/checkout@v4
         with:
-          repository: REPLACE/uefi-example   # this board's firmware checkout
-          path: uefi-example
-          submodules: recursive   # the firmware volume builds from the checkout's submodules
+          repository: xiaomi-pad-8-pro-development/android_device_xiaomi_piano-uefi
+          ref: main
+          path: android_device_xiaomi_piano-uefi
       - name: tools
         run: |
-          brew install dtc llvm lld cmake mtools blacktop/tap/ipsw
-          # Fail fast, naming the tool, before forty minutes of build.
+          brew install dtc llvm lld cmake mtools ninja blacktop/tap/ipsw
+          {
+            echo "/opt/homebrew/opt/llvm/bin"
+            echo "/opt/homebrew/opt/lld/bin"
+          } >> "$GITHUB_PATH"
           ok=1
           for t in clang xcodebuild make git ninja cmake dtc fdtget fdtput aea compression_tool \
                    mformat mcopy ipsw; do
@@ -62,12 +60,45 @@ jobs:
             echo 'Set the repository secret UNIXNU_UNIQUE_CHIP_ID: the platform seed of the device, 8 hex digits.' >&2
             exit 1
           fi
+      - name: setup uefi deps & local fixes
+        run: |
+          (cd android_device_xiaomi_piano-uefi && tools/setup-deps.sh)
+          cp device/macos/unixnu.lock device/unixnu.lock
+          device/scripts/apply-local-fixes.sh UniXNU
+      - name: prepare macOS Data seed & policies
+        if: inputs.os == 'macos-27.3-26C5035r'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 UniXNU/unixnu defconfig piano_macos_defconfig -D device --os macos-27.3-26C5035r
+          python3 UniXNU/unixnu fetch -D device --os macos-27.3-26C5035r
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys
+          sys.path.insert(0, 'UniXNU/scripts')
+          from unixnu.cli import parser
+          from unixnu.config import Context
+          from unixnu.ipsw import Ipsw
+          from unixnu.userdata import disk_blocks, image_size
+
+          args = parser().parse_args(['build', 'kernel', '-D', 'device', '--os', 'macos-27.3-26C5035r'])
+          ctx = Context(args)
+          source = Ipsw(ctx)
+          os_dmg = source.disk_image('OS')
+          runtime = ctx.work / 'runtime'
+          runtime.mkdir(parents=True, exist_ok=True)
+          seed = runtime / 'data.dbr'
+          subprocess.run([
+              'sudo', sys.executable, 'UniXNU/scripts/make-macos-data-seed.py',
+              str(os_dmg), str(seed), '--gib', '36', '--skip-setup', '--user-stdin', '--auto-login'
+          ], input=json.dumps({'name': 'unixnu', 'password': 'unixnu'}).encode(), check=True)
+          subprocess.run(['sudo', 'chown', str(__import__('os').getuid()), str(seed)], check=True)
+          PY
       - name: package
         working-directory: device
         env:
           UNIXNU_UNIQUE_CHIP_ID: ${{ secrets.UNIXNU_UNIQUE_CHIP_ID }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: scripts/package.sh --os "${{ inputs.os }}" --uefi ../uefi-example
+        run: scripts/package.sh --os "${{ inputs.os }}" --uefi ../android_device_xiaomi_piano-uefi/deps/Mu-Silicium
       - name: images
         uses: actions/upload-artifact@v4
         with:
@@ -75,7 +106,8 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           path: |
-            UniXNU/out/example/*/*/boot/boot.img
-            UniXNU/out/example/*/*/payload/payload.img
-            UniXNU/out/example/*/*/kernel/kernel.macho
-            UniXNU/out/example/*/*/package.manifest.json
+            UniXNU/out/piano/*/*/boot/boot.img
+            UniXNU/out/piano/*/*/payload/payload.img
+            UniXNU/out/piano/*/*/kernel/kernel.macho
+            UniXNU/out/piano/*/*/runtime/data.dbr
+            UniXNU/out/piano/*/*/package.manifest.json

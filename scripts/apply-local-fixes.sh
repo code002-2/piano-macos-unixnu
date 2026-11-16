@@ -20,8 +20,10 @@ for feed in "$unixnu"/out/feeds/UniXNU-sm8750-common-*; do
 	[ -d "$feed" ] && apply "$feed" "$here/patches/local/sm8750-common-smmu-piano.patch"
 done
 
-# Stage 7 display: NativeGOPPresenter is linked once, not twice.
-apply "$unixnu" "$here/patches/local/sm8750-stage7-display-once.patch"
+# Stage 7 display: NativeGOPPresenter is linked once, not twice (SM8750 fork only).
+if [ -f "$unixnu/scripts/build-stage7-display.py" ]; then
+	apply "$unixnu" "$here/patches/local/sm8750-stage7-display-once.patch"
+fi
 
 # Adreno830 needs ArmSmmu4K e923329 (feeds.toml); checked out under .cache.
 smmu="$here/.cache/kits/ArmSmmu4K"

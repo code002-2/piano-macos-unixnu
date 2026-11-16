@@ -186,15 +186,19 @@ windows = [
 
 # macOS 27.3, on the UniXNU core (UniXNU/UniXNU, profiles/os/macos-27.3-26C5035r)
 # with its own components; the layout follows the Xiaomi Pad 6S Pro board
-# (UniXNU/UniXNU-sheng, BSD-2-Clause-Patent). First stage: the macOS kernel
-# collection from RAM with the boot text on the UEFI framebuffer (vc-text=1),
-# one CPU, no storage driver, no GPU. docs/MACOS.md has the build line.
+# (UniXNU/UniXNU-sheng, BSD-2-Clause-Patent).
 [os_overrides."macos-27.3-26C5035r".board]
 kit = "piano"
-description = "Xiaomi Pad 8 Pro: macOS first boot from RAM"
+description = "Xiaomi Pad 8 Pro: macOS 27.3"
 
 [os_overrides."macos-27.3-26C5035r".components]
 include = ["ArmDTPlatform", "ArmCpu", "XnuPrelink", "DarwinBoot", "GopFramebuffer", "AppleKeyStoreState"]
+
+[os_overrides."macos-27.3-26C5035r".userdata]
+partition = "unixnu"
+first_lba = 16215040
+last_lba = 30699007
+lba_bytes = 4096
 
 [os_overrides."macos-27.3-26C5035r".kernel]
 defconfig = "piano_macos_defconfig"
@@ -202,32 +206,44 @@ defconfig = "piano_macos_defconfig"
 # patches/xnu-12377 takes the SoC place for this kernel.
 patch_series = ["arch:patches/xnu/series", "device:patches/xnu-12377/series", "os:patches/xnu/series"]
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8750.config", "os:configs/macos.config"]
-# The display, key event and AES services of this kernel are built by one
-# board script on the Pad 6S Pro (build-gop-legacy-display-27.py); the piano
-# one is not written yet, so this stage has the boot text only.
 archives = [
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
   "component:ArmDTPlatform",
   "component:ArmCpu",
   "build-libpthread-kernel.py",
+  "build-piano-source-storage.py --policy-dir scripts/policies/macos-27.3-26C5035r",
   "component:AppleKeyStoreState",
+  "build-piano-macos-display-aes.py",
   "build-piano-macos-glue.py",
 ]
 
 [os_overrides."macos-27.3-26C5035r".payload]
-# The macOS kernel collection is about 137 MiB.
-size_mib = 200
-title = "Xiaomi Pad 8 Pro: macOS first boot"
+# The macOS kernel collection (137 MiB), Data seed (20 MiB), and boot shims.
+size_mib = 187
+timeout = -1
+title = "Xiaomi Pad 8 Pro: macOS 27.3"
 # timebase-hz: the SM8750 architected timer runs at 19.2 MHz and macOS
 # userspace expects 24 MHz. All eight CPUs (smp=1, sm8750-smp.patch).
-kernel_args = ["debug=0x14e", "smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "kt_fixed_zones=120", "-no_slto_panic", "use_contiguous_hint=0", "offline-legacy-register=1", "offline-legacy-gop=1", "offline-legacy-unit-scale=2", "offline-legacy-pm=1", "offline-legacy-validate=1", "offline-legacy-transfer=1", "offline-legacy-cpu-present=1", "offline-legacy-phase=4", "offline-key-events=1", "aks=1", "log=1", "disable-watchdogd=1", "vc-text=1", "exec-log=1", "apfs-boot-shim=1", "timebase-hz=24000000"]
+kernel_args = ["debug=0x14e", "smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "kt_fixed_zones=120", "-no_slto_panic", "use_contiguous_hint=0", "native-source-storage=1", "native-ufs-root=1", "offline-mobile-graphics-load=1", "offline-mobile-graphics-client=1", "offline-legacy-register=1", "offline-legacy-gop=1", "offline-legacy-unit-scale=2", "offline-legacy-pm=1", "offline-legacy-validate=1", "offline-legacy-transfer=1", "offline-legacy-cpu-present=1", "offline-legacy-phase=4", "offline-key-events=1", "aks=1", "aks-sls=3", "data-persist=2", "log=1", "disable-watchdogd=1", "vc-text=1", "exec-log=1", "apfs-boot-shim=1", "timebase-hz=24000000"]
+text_fixups = ["dyld_shared_cache_arm64e.03,5de1134,08060037,1f2003d5"]
 
 [os_overrides."macos-27.3-26C5035r".payload.adt]
 # T6050, the chip of Mac17,11 (the profile's identity).
 chip_id = "6050"
 # 6 GiB is the most the 4 KiB bootstrap tables map.
 owned_memory_size = "0x180000000"
+owned_memory_excluded_ranges = 64
+loader_inputs = true
 
-# No [payload.runtime] yet: the macOS userspace runtime and its Data seed
-# come with the root and Data mounts (storage stage).
+[os_overrides."macos-27.3-26C5035r".payload.runtime]
+target = "macos27"
+build = "26C5035r"
+gpu_addon = false
+data_seed_tool = "scripts/make-macos-data-seed.py"
+skip_setup = false
+data_gib = 36
+boot_shims = true
+
+[os_overrides."macos-27.3-26C5035r"]
+remove = ["payload.skip_setup_tool", "payload.runtime.wallpapers", "payload.runtime.audio_system_plugins", "payload.runtime.wifi_launchd_cache", "payload.runtime.appsync", "payload.runtime.launchd_job_environment"]
