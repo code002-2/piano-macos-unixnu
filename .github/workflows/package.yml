@@ -89,8 +89,8 @@ jobs:
           seed = runtime / 'data.dbr'
           subprocess.run([
               'sudo', sys.executable, 'UniXNU/scripts/make-macos-data-seed.py',
-              str(os_dmg), str(seed), '--gib', '36', '--skip-setup', '--user-stdin', '--auto-login'
-          ], input=json.dumps({'name': 'unixnu', 'password': 'unixnu'}).encode(), check=True)
+              str(os_dmg), str(seed), '--gib', '36', '--skip-setup', '--user', 'unixnu:unixnu', '--auto-login'
+          ], check=True)
           subprocess.run(['sudo', 'chown', str(__import__('os').getuid()), str(seed)], check=True)
           PY
       - name: package

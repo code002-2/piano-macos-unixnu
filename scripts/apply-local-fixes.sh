@@ -39,6 +39,11 @@ if [ -f "$unixnu/profiles/os/macos-27.3-26C5035r/profile.toml" ]; then
 	apply "$unixnu" "$here/patches/local/unixnu-bootimg-concatenated-dtb.patch"
 fi
 
+# Prefer the RAM payload's unixnu.toml over any UFS ESP when booting via fastboot boot.
+if [ -f "$unixnu/package/UniXNUPkg/Library/UniXNULib/Config.c" ]; then
+	apply "$unixnu" "$here/patches/local/0001-UniXNULib-config-prefer-the-RAM-payload.patch"
+fi
+
 # launchd needs the original 21H461 trust cache (sha256 below, same bundle as
 # the OnePlus 13T). Without it: "pid=1 launchd exec MAC policy REFUSED".
 want=7416ca4f8377146626bb284e2133c76bee6cb4e3ee0af5d648b186235a7323a7
