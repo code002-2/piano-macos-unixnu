@@ -86,6 +86,7 @@ jobs:
           os_dmg = source.disk_image('OS')
           runtime = ctx.work / 'runtime'
           runtime.mkdir(parents=True, exist_ok=True)
+          pathlib.Path('UniXNU/build').mkdir(parents=True, exist_ok=True)
           seed = runtime / 'data.dbr'
           subprocess.run([
               'sudo', sys.executable, 'UniXNU/scripts/make-macos-data-seed.py',
